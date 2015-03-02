@@ -21,8 +21,8 @@ void setup() {
 }
  
 void loop() {
-  
-  if (digitalRead(BTN_PIN))
+  //Сменим режим работы, если нажата кнопка
+  if (BtnPressed(BTN_PIN))
   {
     status_run = !status_run;
      if (status_run)
@@ -34,16 +34,15 @@ void loop() {
     }
     else
     {
-      digitalWrite(LED_PIN, LOW);
       Serial.println("STOP");
+      digitalWrite(LED_PIN, LOW);
+      GetTemperature(true);
     }
-    //вот такая некрасивая борьба с дребезгом сейчас
-    delay(300);
   }
   if (status_run)
   {
     //инфа о температуре
-    GetTemperature();
+    GetTemperature(false);
     
     //Светодиод горит при закипании (по умолчанию от 99 градусов).
     //Мигает с частотой 550мс при температуре ниже 1 градуса.
@@ -68,10 +67,12 @@ void Blink(unsigned long interval){
   }
 }
 
-void GetTemperature(){
+void GetTemperature(boolean finish){
   static unsigned long prevTime=0;
   static bool start_reed_tempr=false;
   static byte data[2];
+  
+  if (finish) {start_reed_tempr=false; return;}
   
   //Спросим датчик о температуре
   if (!start_reed_tempr){
@@ -109,3 +110,19 @@ void PrintTemperature(){
   else {Serial.print(" :boil: 0");}
   Serial.println();
 }
+
+//Чтение нажатия кнопки
+boolean BtnPressed(byte btn_pin){
+  static boolean last_btn_status = LOW;
+  boolean btn_status=digitalRead(btn_pin);
+  boolean result=false;
+  //борьба с дребезгом
+  if (btn_status!=last_btn_status){
+    delay(5);
+    btn_status=digitalRead(btn_pin);  
+  }
+  if (last_btn_status==LOW && btn_status==HIGH) result=true;
+  last_btn_status=btn_status;
+  return result;
+}
+
