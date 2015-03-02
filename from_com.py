@@ -40,7 +40,7 @@ def save_to_file():
             continue
         try:
             valuse=s.split(':')
-            f_out.write(valuse[1].strip()+';'+valuse[3].strip()+';'+valuse[5].strip()+';'+valuse[7].strip()+'\n')
+            f_out.write(datetime.datetime.now().strftime("%y_%m_%d_%H_%M_%S")+';'+valuse[1].strip()+';'+valuse[3].strip()+';'+valuse[5].strip()+';'+valuse[7].strip()+'\n')
             print(valuse[5].strip()+"   "+str(int(valuse[3].strip())//60000)+":"+str(int(valuse[3].strip())//1000%60))
         except:
             print ("Can't decode")
