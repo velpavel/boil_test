@@ -1,27 +1,31 @@
 ﻿#-------------------------------------------------------------------------------
-# Name:        модуль1
-# Purpose:
-#
-# Author:      Pavel
-#
-# Created:     11.11.2014
-# Copyright:   (c) Pavel 2014
-# Licence:     <your licence>
+# Author:      PaVel
 #-------------------------------------------------------------------------------
 import serial
 import datetime
+import os
 serial_port = 'COM8'
 serial_speed = 38400
 
 def init_serial():
     return serial.Serial(serial_port,serial_speed)
 
-def save_to_file():
+def open_file(file_name):
+    # Если файл есть и открывается, то используем его. 
+    # При ошибке проверки существования или открытия сменим имя.
+    # Создадим файл и шапку.
+    try:
+        if os.path.exists(file_name):
+            f_out=open(file_name, 'a')
+            return f_out
+    except:
+        file_name='temperature_'+datetime.datetime.now().strftime("%y_%m_%d_%H_%M_%S")+'.csv'
+    f_out = open(file_name, 'w')
+    f_out.write('date;RID;MS;Temperature;boil\n')
+    return f_out
+    
+def save_to_file(f_out_name='temperature.csv'):
     ser=init_serial()
-    #f_out = open('temperature_'+datetime.datetime.now().strftime("%y_%m_%d_%H_%M_%S")+'.csv', 'w')
-    f_out_name='temperature.csv'
-#    f_out = open(f_out_name, 'a')
-    #ser=serial.Serial(serial_port,serial_speed)
     print("Wait data")
     while 1:
         try:
@@ -32,7 +36,8 @@ def save_to_file():
             print ("No data")
         if s=='START':
             print(s)
-            f_out = open(f_out_name, 'a')
+            f_out = open_file(f_out_name)
+            f_out_name = f_out.name
             continue
         if s=='STOP':
             print(s)
