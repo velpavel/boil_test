@@ -19,7 +19,7 @@ def open_file(file_name):
             f_out=open(file_name, 'a')
             return f_out
     except:
-        file_name='temperature_'+datetime.datetime.now().strftime("%y_%m_%d_%H_%M_%S")+'.csv'
+        file_name='temperature_'+datetime.datetime.now().strftime("%Y%m%d_%H%M%S")+'.csv'
     f_out = open(file_name, 'w')
     f_out.write('date;RID;MS;Temperature;boil\n')
     return f_out
@@ -50,10 +50,10 @@ def save_to_file(f_out_name='temperature.csv'):
             continue
         try:
             valuse=s.split(':')
-            f_out.write(datetime.datetime.now().strftime("%y%m%d %H:%M:%S")+';'+valuse[1].strip()+';'+valuse[3].strip()+';'+valuse[5].strip()+';'+valuse[7].strip()+'\n')
+            f_out.write(datetime.datetime.now().strftime("%Y%m%d %H:%M:%S")+';'+valuse[1].strip()+';'+valuse[3].strip()+';'+valuse[5].strip()+';'+valuse[7].strip()+'\n')
             print(valuse[5].strip()+"   "+str(int(valuse[3].strip())//60000)+":"+str(int(valuse[3].strip())//1000%60))
         except:
-            print ("Can't decode")
+            print ("Arduino message: "+s)
     f_out.close()
     ser.close()
 
