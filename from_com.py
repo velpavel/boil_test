@@ -25,7 +25,12 @@ def open_file(file_name):
     return f_out
     
 def save_to_file(f_out_name='temperature.csv'):
-    ser=init_serial()
+    try:
+        ser=init_serial()
+    except:
+        print("Serial port error")
+        input("Press Enter")
+        return
     print("Wait data")
     while 1:
         try:
@@ -45,7 +50,7 @@ def save_to_file(f_out_name='temperature.csv'):
             continue
         try:
             valuse=s.split(':')
-            f_out.write(datetime.datetime.now().strftime("%y_%m_%d_%H_%M_%S")+';'+valuse[1].strip()+';'+valuse[3].strip()+';'+valuse[5].strip()+';'+valuse[7].strip()+'\n')
+            f_out.write(datetime.datetime.now().strftime("%y%m%d %H:%M:%S")+';'+valuse[1].strip()+';'+valuse[3].strip()+';'+valuse[5].strip()+';'+valuse[7].strip()+'\n')
             print(valuse[5].strip()+"   "+str(int(valuse[3].strip())//60000)+":"+str(int(valuse[3].strip())//1000%60))
         except:
             print ("Can't decode")

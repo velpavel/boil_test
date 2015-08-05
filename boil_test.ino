@@ -1,10 +1,11 @@
 #include <OneWire.h>
 
-#define BTN_PIN 3 //Пин с кнопкой
-#define LED_PIN 13 //Пин со светодиодом 
-#define TERMO_PIN 10 //Пин с теромометром
+#define BTN_PIN 3 //Пин с кнопкой. Старт-Стоп.
+#define LED_PIN 13 //Пин со светодиодом. Используется как индикатор температуры воды.
+#define BUZZER_PIN 11 //Пин с пищалкой. Используется как сигнал закипания. Её функция Tone блокирует ШИМ на 3 и 11 пинах
+#define TERMO_PIN 10 //Пин с теромометром.
 #define RANDOM_PIN A0 //Генератор ПСЧ. Любой аналог_рид пин к которому ничего не подключено.
-#define BOIL_TEMP 99 //Температура при которой мы считаем, что вода кипит
+#define BOIL_TEMP 99 //Температура при которой мы считаем, что вода кипит.
 
 OneWire ds(TERMO_PIN);  
 unsigned long start_ms=0; //время начала эксперимента
@@ -105,7 +106,7 @@ void PrintTemperature(){
   Serial.print(millis()-start_ms);
   Serial.print(" :T: ");
   Serial.print(temperature);
-  if (temperature>=BOIL_TEMP && !boil) {Serial.print(" :boil: 1"); boil= true;}
+  if (temperature>=BOIL_TEMP && !boil) {Serial.print(" :boil: 1"); boil= true; tone(BUZZER_PIN, 4000, 1000);}
   else if (boil && temperature<BOIL_TEMP) {Serial.print(" :boil: -1"); boil= false;}
   else {Serial.print(" :boil: 0");}
   Serial.println();
