@@ -2,8 +2,13 @@
 //
 //!!!Внимание!!! используется EEPROM 411, 412, 413, 414, 415
 
-#include <OneWire.h>
+#include <OneWire.h>    //Для термометра
 #include <EEPROM.h>
+#include <Wire.h>       //Для часов
+#include <TimeLib.h>    //Для часов 
+#include <DS1307RTC.h>  //Для часов
+#include <SPI.h>        //Для карты памяти
+#include <SD.h>         //Для карты памяти
 
 #define CHECH_EEPROM_ADRESS 411 //адрес EEPROM в по которому должно хранится значение, указывающие на то, что все нужные значения в EEPROM заполнены
 #define CHECH_EEPROM_VALUE 166 //Значение, которые должно быть по адресу CHECH_EEPROM_ADRESS
@@ -12,14 +17,21 @@
 #define EXPERIMENT_ID_EEPROM_LOW 414 //адрес EEPROM с младшим байтом ID эксперимента
 //#define BOIL_TEMP_EEPROM 415 //в будущем тут будет хранится температура закипания
 
-#define BTN_PIN 4 //Пин с кнопкой. Старт-Стоп.
-#define LED_PIN 13 //Пин со светодиодом. Используется как индикатор температуры воды.
+#define BTN_PIN 5 //Пин с кнопкой. Старт-Стоп.
+#define LED_PIN A1 //Пин со светодиодом. Используется как индикатор температуры воды.
 #define BUZZER_PIN 3 //Пин с пищалкой. Используется как сигнал закипания. Её функция Tone блокирует ШИМ на 3 и 11 пинах
 //Пищалка блокирует ШИМ на 3ем и на 11 портах
-#define TERMO_PIN 10 //Пин с теромометром.
+#define TERMO_PIN 9 //Пин с теромометром. На 10м пине не работает из-за конфликта с SD картой
 #define RANDOM_PIN A0 //Генератор ПСЧ. Любой аналог_рид пин к которому ничего не подключено.
+//! A4 -SDA часы
+//! A5 -SCL часы
+#define SD_CS_PIN 10
+//! 11 - SD MOSI
+//! 12 - SD MISO
+//! 13 - SD CLK/SCK
 
 #define BOIL_TEMP 97 //Температура при которой мы считаем, что вода кипит.
+#define HELP_STRING "s - start/stop; l - display last results; h - help; d - remove sum file; ! - remove detail file"
 
 OneWire ds(TERMO_PIN);
 unsigned long start_ms = 0; //время начала эксперимента
@@ -29,11 +41,18 @@ int temperature = 0;
 int device_id;
 unsigned int exper_id;
 
-void setup() {
-  Serial.begin(38400);
+File myFile;  //объект для файла на SD карте.
+#define temper_file_name "temper.csv"
+#define temper_sum_file_name "tsum.txt"
+boolean sd_ok=false;
+
+void setup() {  
+  Serial.begin(9600);
   randomSeed(analogRead(RANDOM_PIN));
   pinMode(BTN_PIN, INPUT);
   pinMode(LED_PIN, OUTPUT);
+  pinMode(SD_CS_PIN, OUTPUT);
+  pinMode(BUZZER_PIN, OUTPUT);
   if (EEPROM.read(CHECH_EEPROM_ADRESS) == CHECH_EEPROM_VALUE) {
     device_id = EEPROM.read(DEVICE_ID_EEPROM);
     exper_id = EEPROM.read(EXPERIMENT_ID_EEPROM_HIGH) * 255 + EEPROM.read(EXPERIMENT_ID_EEPROM_LOW);
@@ -50,17 +69,52 @@ void setup() {
 
     Serial.println("EEPROM values were NULL. Generated new.");
   }
+  //Проверим наличие карты памяти.
+  if (!SD.begin(SD_CS_PIN)) {
+    Serial.println("SD init failed");
+    sd_ok=false;
+    tone(BUZZER_PIN, 3000, 200);
+    digitalWrite(LED_PIN, HIGH);
+    delay(100);
+    digitalWrite(LED_PIN, LOW);
+    delay(200);
+    tone(BUZZER_PIN, 3000, 200);
+    digitalWrite(LED_PIN, HIGH);
+    delay(200);
+    digitalWrite(LED_PIN, LOW);
+  }
+  else{sd_ok=true; Serial.println("SD init ok");}
+  //проверим/создадим файл для температуры
+  if (sd_ok){
+    if (!SD.exists(temper_file_name)){
+      //temper_file_name
+      Sd_print("Date;RID;MS;Temperature;boil", temper_file_name);
+      Serial.println("Created new file");
+    }
+  }
+  Serial.println(HELP_STRING);
+  Serial.println("Ready!");
 }
 
 void loop() {
   //Сменим режим работы, если нажата кнопка
-  if (BtnPressed(BTN_PIN))
+  char incomingByte='_';
+  bool need_change_mode = false;
+  if (Serial.available() > 0){
+    incomingByte = Serial.read();
+    if (incomingByte == 's' || incomingByte == 's' ) { need_change_mode=true; }
+    if (incomingByte == 'h' || incomingByte == 'H' || incomingByte == '?' ) { Serial.println(HELP_STRING); }
+    if (incomingByte == 'l' || incomingByte == 'L' ) { SD_read_last_sum(); }
+    if (incomingByte == 'd' || incomingByte == 'D' ) { SD.remove(temper_sum_file_name); Serial.println("Sum file removed"); }
+    if (incomingByte == '!') { SD.remove(temper_file_name); Serial.println("Detail file removed"); }
+  }
+  if (BtnPressed(BTN_PIN) || need_change_mode)
   {
     status_run = !status_run;
     if (status_run)
     {
       boil = false;
-      start_ms = millis();
+      start_ms = millis();                                                                                                                                                                                                                                                             
       exper_id += 1;
       WriteExperID(exper_id);
       Serial.println("START");
@@ -104,6 +158,7 @@ void GetTemperature(boolean finish) {
   static unsigned long prevTime = 0;
   static bool start_reed_tempr = false;
   static byte data[2];
+  
 
   if (finish) {
     start_reed_tempr = false;
@@ -128,34 +183,86 @@ void GetTemperature(boolean finish) {
     data[1] = ds.read();
     temperature = (data[1] << 8) + data[0];
     temperature = temperature >> 4;
-    //печать в серийный порт
+    //печать в серийный порт и на SD карту
     PrintTemperature();
   }
 }
 
 //Печать всего в серийный порт
 void PrintTemperature() {
-  Serial.print("RID: ");
-  Serial.print(device_id);
-  Serial.print("_");
-  Serial.print(exper_id);
-  Serial.print(" :MS: ");
-  Serial.print(millis() - start_ms);
-  Serial.print(" :T: ");
-  Serial.print(temperature);
+  String print_serial="";
+  String print_SD=printdate()+";";
+  print_serial+="RID: "+String(device_id)+"_"+String(exper_id);
+  print_SD+=String(device_id)+"_"+String(exper_id)+";";
+  unsigned long boil_time=millis() - start_ms;
+  print_serial+=" :MS: "+String(boil_time);
+  print_SD+=String(boil_time)+";";
+  print_serial+=" :T: "+String(temperature);
+  print_SD+=String(temperature)+";";
+  
   if (temperature >= BOIL_TEMP && !boil) {
-    Serial.print(" :boil: 1");
+    print_serial+=" :boil: 1";
+    print_SD+="1"; 
     boil = true;
     tone(BUZZER_PIN, 4000, 1000);
+    String sd_sum_str = printdate()+" "+String(exper_id)+" "+String(boil_time/1000/60)+":"+String(boil_time/1000%60);
+    Sd_print(sd_sum_str, temper_sum_file_name);
   }
   else if (boil && temperature < BOIL_TEMP) {
-    Serial.print(" :boil: -1");
+    print_serial+=" :boil: -1";
+    print_SD+="-1"; 
     boil = false;
   }
   else {
-    Serial.print(" :boil: 0");
+    print_serial+=" :boil: 0";
+    print_SD+="0"; 
   }
-  Serial.println();
+  Serial.println(print_serial);
+  Sd_print(print_SD, temper_file_name);
+}
+
+void Sd_print(String str, String file_path){
+  if (sd_ok){
+    myFile=SD.open(file_path, FILE_WRITE);
+    myFile.println(str);
+    myFile.close();
+  }
+}
+
+void SD_read_last_sum(){
+  if (sd_ok){
+    if (SD.exists(temper_sum_file_name)){
+      myFile = SD.open(temper_sum_file_name);
+      while (myFile.available()) {
+        Serial.write(myFile.read());
+      }
+      myFile.close();
+    }
+    else {Serial.println("Sum file doesn't exist.");}
+  }
+  else {Serial.println("SD init failed");}
+}
+
+String printdate(){
+  tmElements_t tm;
+  RTC.read(tm);
+  String date_str="";
+  date_str+=String(tmYearToCalendar(tm.Year));
+  date_str+=String(tm.Month/10);
+  date_str+=String(tm.Month%10);
+  date_str+=String(tm.Day/10);
+  date_str+=String(tm.Day%10);
+  date_str+=String(" ");
+  date_str+=String(tm.Hour/10);
+  date_str+=String(tm.Hour%10);
+  date_str+=String(":");
+  date_str+=String(tm.Minute/10);
+  date_str+=String(tm.Minute%10);
+  date_str+=String(":");
+  date_str+=String(tm.Second/10);
+  date_str+=String(tm.Second%10);
+
+  return date_str;
 }
 
 //Чтение нажатия кнопки
@@ -178,4 +285,3 @@ void WriteExperID(int exper_id) {
   if (EEPROM.read(EXPERIMENT_ID_EEPROM_LOW) != exper_id % 255) EEPROM.write(EXPERIMENT_ID_EEPROM_LOW, exper_id % 255);
   if (EEPROM.read(EXPERIMENT_ID_EEPROM_HIGH) != exper_id / 255) EEPROM.write(EXPERIMENT_ID_EEPROM_HIGH, exper_id / 255);
 }
-
